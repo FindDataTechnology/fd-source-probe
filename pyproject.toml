@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fd-source-probe"
+version = "0.1.0"
+description = "源侦察探针 MCP（internal-only）：只读探测一个端点并返回状态码/耗时/响应头/出口身份/响应体前缀，供源解决方案舰队产出可复现的实测证据。"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "FindDataTechnology" }]
+dependencies = [
+    "fastmcp>=3.4,<4",
+    "httpx>=0.27",
+    "click",
+    "uvicorn",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "respx"]
+
+[project.scripts]
+fd-source-probe = "fd_source_probe.cli:cli"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = ["network: real outbound probes, skipped by default"]
+
+[tool.setuptools]
+packages = ["fd_source_probe"]
