@@ -7,6 +7,7 @@ deploy/lint-shell.sh
 deploy/onboard.sh
 deploy/rehearse-slot.sh
 deploy/ssrf-neg.sh
+docs/artifacts/registry-payload.json
 docs/artifacts/rollback-slot.sh
 docs/artifacts/slot-would-add.txt
 docs/artifacts/slot-would-delete.txt

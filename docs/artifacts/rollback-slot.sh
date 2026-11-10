@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 回滚 testaction003/build-pool 到本仓覆盖前的占位。
 #
-# 锚点（默认 abea607 = "fd-wanxing.git @ 53eeb8957 — snapshot"）
+# 锚点（默认 09bcdd4 = "law-bench-internal @ 3d0b6ee71 — snapshot"，2026-11-11 覆盖前现算）
 #   ⚠️ 池是共享槽位、随时被别的会话推走（2026-11-10 实测：abea607 → 09bcdd4 在 1 小时内发生）。
 #   **覆盖前必须重跑 `bash deploy/rehearse-slot.sh` 核对锚点**，不一致就用它给的当前 HEAD：
 #       ANCHOR=<当前 HEAD> bash docs/artifacts/rollback-slot.sh --apply
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 POOL="${POOL:-testaction003/build-pool}"
-ANCHOR="${ANCHOR:-abea607c8a2ff58806f0977403ad6e736db48334}"
+ANCHOR="${ANCHOR:-09bcdd48270abc303f34d298b55a9360df8a1d90}"
 SRC="${SRC:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 MODE="dry"
