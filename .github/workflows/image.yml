@@ -13,9 +13,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# 本仓既可能在自己的专属仓跑，也可能被 fd-build-snapshot 推进共享出片池
+# （testaction00x/build-pool）——那里每个项目轮流占位，别人一 push 就会 cancel 我们的构建：
+# 被 cancel 的镜像构建会留下半写 tag（平台文档明确：cancel-in-progress 对出片仓是错的）。
+# 故改为**排队不取消**。同 ref 串行，不同 ref 并行。
 concurrency:
   group: image-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
