@@ -37,6 +37,9 @@
 - `deploy/onboard.sh` — 上牌四步一键执行（`--dry-run` 默认只预检；`--apply` 真跑；`--step N` 单步）
 - `deploy/VERIFY.md` — 逐条可判绿判红的校验清单（0 前置 / 1 首推 / 2 镜像 / 3 ArgoCD / 4 注册 / 5 实证 / 6 舰队接线）
 - `deploy/ssrf-neg.sh` — §5.3/§5.4 的集群内 SSRF 负例（`--dry-run` 占用+报错路径自检 / `--local` 本机预演 / 无参集群真跑）
+- `deploy/rehearse-slot.sh` — 出片池覆盖演练（只读；产出删除/新增清单 + 回滚脚本到 `docs/artifacts/`）
+- **待裁决一页**：[`docs/build-slot-decision.md`](../docs/build-slot-decision.md)（覆盖 408 项的证据、8 次 failure 的 run id、回滚演练）
+- **回滚脚本**：[`docs/artifacts/rollback-slot.sh`](../docs/artifacts/rollback-slot.sh)（`--dry-run` / `--simulate-overwrite` / 无参=真回滚）
 
 脚本纪律：fail-closed（预检不满足就停）、幂等（重复跑不产生第二份资源）、不猜（注册条目无令牌只打印 curl）。
 

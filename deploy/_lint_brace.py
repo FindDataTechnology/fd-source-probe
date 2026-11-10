@@ -10,10 +10,13 @@ import sys
 
 BAD = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)(?=[^\x00-\x7F])")
 bad = []
-for f in sorted(pathlib.Path(__file__).resolve().parent.glob("*.sh")):
+roots = [pathlib.Path(__file__).resolve().parent,
+         pathlib.Path(__file__).resolve().parent.parent / "docs" / "artifacts"]
+files = [f for r in roots if r.is_dir() for f in sorted(r.glob("*.sh"))]
+for f in files:
     for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
         for m in BAD.finditer(line):
-            bad.append(f"{f.name}:{i}: ${m.group(1)} 后接非 ASCII → 改 ${{{m.group(1)}}}")
+            bad.append(f"{f.parent.name}/{f.name}:{i}: ${m.group(1)} 后接非 ASCII → 改 ${{{m.group(1)}}}")
 for b in bad:
     print(b)
 print(f"checked, violations={len(bad)}")
