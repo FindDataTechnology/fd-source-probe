@@ -7,21 +7,21 @@
 
 | # | 判据 | 怎么验 | 期望 |
 |---|---|---|---|
-| 0.1 | gitee 空仓存在 | `git ls-remote --exit-code gitee HEAD` | 退出码 0（空仓也返回 0） |
-| 0.2 | 仓上两个 secret 已配 | `gh secret list -R <仓>` 或在 gitee 仓设置里看 | `TCR_USERNAME`、`TCR_PASSWORD` 都在 |
+| 0.1 | ~~gitee 空仓存在~~ | **已按裁决取消**（2026-11-10：不建 gitee 仓、不新增 gitee secret） | 不适用 |
+| 0.2 | ~~仓上两个 TCR secret~~ | **已按裁决取消**——构建走 GitHub Actions 出片仓，凭据在出片仓上 | 不适用 |
 | 0.3 | 上下文正确 | `kubectl --context cheap-ts get ns fd-prod` | 有 `fd-prod`（ArgoCD 与 fd-prod 同在 cheap 集群） |
 
 ## 1. 首推
 
 | # | 判据 | 怎么验 | 期望 |
 |---|---|---|---|
-| 1.1 | 远端与本地同提交 | `git -C fd-source-probe rev-parse HEAD` vs `git ls-remote gitee refs/heads/main` | 两个 sha 相同 |
+| 1.1 | ~~首推 gitee~~ | **已按裁决跳过**；脚本只在探测到仓已存在时才推 | 不适用（跳过时脚本会明说） |
 
 ## 2. 镜像
 
 | # | 判据 | 怎么验 | 期望 |
 |---|---|---|---|
-| 2.1 | 测试门绿 | `gh run list -R <仓> --workflow image.yml` | 最新一次 `success` |
+| 2.1 | 测试门绿（出片仓跑的是同一套 52 条） | `gh run list -R testaction003/build-pool --limit 3` | 最新一次 `success` |
 | 2.2 | ccr 里有 `:main` | `skopeo inspect --no-tags docker://ccr.ccs.tencentyun.com/finddata-business/fd-source-probe:main` | 返回 manifest（**清单 pin 的是 ccr，不是 hkccr——中间有 relay**） |
 | 2.3 | 镜像能起来 | `kubectl --context cheap-ts -n fd-prod get pod -l app.kubernetes.io/name=fd-source-probe` | `1/1 Running`，无 `ImagePullBackOff` |
 | 2.4 | 探针代码在镜像里 | `kubectl exec deploy/fd-source-probe -- fd-source-probe --version` | 打印 `0.1.0`（不是 `command not found`） |

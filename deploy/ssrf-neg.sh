@@ -36,7 +36,7 @@ case "$REPO_DIR" in
   *) echo "✗ REPO_DIR 不是绝对路径：$REPO_DIR" >&2; exit 2 ;;
 esac
 [ -f "$REPO_DIR/pyproject.toml" ] || {
-  echo "✗ REPO_DIR 下没有 pyproject.toml：$REPO_DIR（脚本被拷出仓了？用 REPO_ROOT=<仓根> 覆盖）" >&2
+  echo "✗ REPO_DIR 下没有 pyproject.toml：${REPO_DIR}（脚本被拷出仓了？用 REPO_ROOT=<仓根> 覆盖）" >&2
   exit 2
 }
 CONTEXT="${CONTEXT:-cheap-ts}"

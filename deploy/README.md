@@ -22,6 +22,16 @@
 > 31904 其实被 `chatwoot/chatwoot-web` 占着（fd-prod 里看不见）。server dry-run 当场报
 > `provided port is already allocated`。查法必须是 `kubectl get svc -A`。
 
+## 裁决（2026-11-10）：不出 gitee 仓，构建统一走 GitHub Actions
+
+**不建 gitee `fd-source-probe` 仓、不新增 gitee secret。** 因此：
+
+- **step 1（首推 gitee）默认跳过**，脚本显式打印「已按裁决跳过」；仅当探测到仓已存在才推
+- **step 2 出片**改走 `fd-build-snapshot` → 既有 GitHub 出片仓（默认 `testaction003/build-pool`，
+  份额最多），TCR 凭据在出片仓上，本仓无需任何 secret
+- 快照会**覆盖出片仓当前内容**（dry-run 会先报「将影响 N 项」）→ 真推必须显式加
+  `--allow-snapshot-overwrite`，否则 fail-closed
+
 ## 一键脚本与校验清单
 
 - `deploy/onboard.sh` — 上牌四步一键执行（`--dry-run` 默认只预检；`--apply` 真跑；`--step N` 单步）

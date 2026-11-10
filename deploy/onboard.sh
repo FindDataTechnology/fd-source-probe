@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # fd-source-probe 上牌四步 · 一键执行（仓建好之后用）
 #
-# 前置（人工一次）：在 gitee 建空仓 `FindDataTechnology/fd-source-probe`（私有）
-#                  并在仓上配 `TCR_USERNAME` / `TCR_PASSWORD` 两个 secret。
+# 【裁决 2026-11-10】不在 gitee 建 fd-source-probe 仓、不新增 gitee secret；
+# 构建统一走 GitHub Actions（复用现有出片仓），故 step 1/2 与 gitee、TCR secret 解耦：
+#   · step 1（首推 gitee）默认**跳过**并显式报「已按裁决跳过」；只有探测到仓已存在时才推
+#   · step 2 出片改走 `fd-build-snapshot` 到既有 GitHub 出片仓（默认 BUILD_HOST），
+#     不需要本仓配 TCR secret——凭据在出片仓上（scs001/各 testaction 账号）
+#
+# 用法新增：--allow-snapshot-overwrite（真推快照到共享/镜像仓时必须显式给，
+#          因为它会覆盖该仓当前快照；dry-run 会先报出将被删除的文件数）
 #
 # 用法：
 #   bash deploy/onboard.sh --dry-run          # 只做只读预检 + 打印将执行的命令（默认）
@@ -31,9 +37,13 @@ REGISTRY_TOKEN="${REGISTRY_TOKEN:-}"
 
 APPLY=0
 ONLY_STEP=""
+ALLOW_OVERWRITE=0
+BUILD_HOST="${BUILD_HOST:-testaction003/build-pool}"   # 既有 GitHub 出片仓（份额最多）
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1 ;;
+    --allow-snapshot-overwrite) ALLOW_OVERWRITE=1 ;;
+    --build-host) BUILD_HOST="${2:-}"; shift ;;
     --dry-run) APPLY=0 ;;
     --step) ONLY_STEP="${2:-}"; shift ;;
     --context) CONTEXT="${2:-}"; shift ;;
@@ -52,6 +62,11 @@ run() {  # run <描述> <命令...>
   fi
 }
 fail() { echo "✗ $*" >&2; exit 1; }
+
+# 自检：`${VAR}` 花括号闸（$VAR 后接全角字符会被 bash 吞进变量名，set -u 下直接炸）
+if command -v python3 >/dev/null && [ -f "$REPO_DIR/deploy/_lint_brace.py" ]; then
+  python3 "$REPO_DIR/deploy/_lint_brace.py" | tail -1
+fi
 
 echo "== $NAME 上牌 · mode=$([ "$APPLY" = 1 ] && echo apply || echo dry-run) · context=$CONTEXT =="
 
@@ -102,18 +117,42 @@ kubectl --context "$CONTEXT" describe resourcequota -n "$NS" 2>/dev/null \
 # ── 1. 首推 gitee ─────────────────────────────────────────────────────────
 if step_wanted 1; then
   echo "[1] 首推 gitee"
-  [ "$GITEE_OK" = "1" ] || fail "step 1 前置不满足：gitee 仓不存在"
-  run "push gitee" git push -u "$GITEE_REMOTE" main
+  if [ "$GITEE_OK" = "1" ]; then
+    echo "  ✓ 探测到仓已存在 → 按指令推送"
+    run "push gitee" git push -u "$GITEE_REMOTE" main
+  else
+    echo "  ⤳ 已按裁决跳过（2026-11-10：不在 gitee 建 fd-source-probe 仓、不新增 gitee secret）"
+    echo "    探测结果：ls-remote 404 → 仓不存在。此步不再阻塞后续。"
+  fi
 fi
 
 # ── 2. 出片 / 校验镜像 ────────────────────────────────────────────────────
 if step_wanted 2; then
-  echo "[2] 镜像"
-  echo "  通道：仓内 .github/workflows/image.yml（测试门 → hkccr → 内容闸门铸 sha-<7>）"
-  echo "  注意：hkccr → ccr 需 relay（清单里 pin 的是 ccr）。"
-  command -v skopeo >/dev/null || fail "缺 skopeo（镜像 digest 硬门用它）"
-  run "查 ccr digest" skopeo inspect --no-tags "docker://$IMAGE_CCR" >/dev/null
-  echo "  （若上面失败：等仓首推的 image run 绿 + relay 完成，再重跑本步）"
+  echo "[2] 镜像（构建统一走 GitHub Actions · 出片仓 ${BUILD_HOST}）"
+  echo "  裁决依据：不依赖 gitee 仓与 TCR secret；出片仓自带 TCR 凭据。"
+  command -v fd-build-snapshot >/dev/null || fail "缺 fd-build-snapshot"
+  echo "  \$ 先干跑看覆盖面（快照会覆盖出片仓当前内容）"
+  SNAP_OUT=$(fd-build-snapshot "$REPO_DIR" -R "$BUILD_HOST" \
+      --namespace finddata --image "${NAME}" \
+      --dockerfile Dockerfile --context . --ref main --branch main --dry-run 2>&1)
+  echo "$SNAP_OUT" | grep -E "变更|将提交|将推送|⚠️" | sed 's/^/    /'
+  DEL=$(echo "$SNAP_OUT" | grep -oE '变更 [0-9]+ 项' | grep -oE '[0-9]+' || echo 0)
+  echo "    将影响 $DEL 项（其中删除项=出片仓现占位内容）"
+  if [ "$APPLY" = "1" ] && [ "$ALLOW_OVERWRITE" != "1" ]; then
+    fail "真推快照会覆盖 $BUILD_HOST 当前内容——确认请加 --allow-snapshot-overwrite"
+  fi
+  if [ "$APPLY" != "1" ]; then
+    echo "  （dry-run：不推快照。真跑：bash deploy/onboard.sh --apply --allow-snapshot-overwrite）"
+  elif [ "$ALLOW_OVERWRITE" = "1" ]; then
+    run "推快照出片" fd-build-snapshot "$REPO_DIR" -R "$BUILD_HOST" \
+        --namespace finddata --image "${NAME}" \
+        --dockerfile Dockerfile --context . --ref main --branch main
+    echo "  \$ 等出片仓的 image run 绿（出片 tag = 快照仓 commit 短 sha）"
+    gh run list -R "$BUILD_HOST" --limit 3 || true
+  fi
+  echo "  \$ 校验 ccr digest（relay 后 ≤5 分钟）"
+  command -v skopeo >/dev/null || echo "    ! 缺 skopeo，跳过 digest 硬门"
+  command -v skopeo >/dev/null && run "查 ccr digest" skopeo inspect --no-tags "docker://${IMAGE_CCR}" >/dev/null
 fi
 
 # ── 3. ArgoCD apply ──────────────────────────────────────────────────────
