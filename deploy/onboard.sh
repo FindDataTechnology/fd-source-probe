@@ -64,8 +64,8 @@ run() {  # run <描述> <命令...>
 fail() { echo "✗ $*" >&2; exit 1; }
 
 # 自检：`${VAR}` 花括号闸（$VAR 后接全角字符会被 bash 吞进变量名，set -u 下直接炸）
-if command -v python3 >/dev/null && [ -f "$REPO_DIR/deploy/_lint_brace.py" ]; then
-  python3 "$REPO_DIR/deploy/_lint_brace.py" | tail -1
+if [ -x "$REPO_DIR/deploy/lint-shell.sh" ]; then
+  "$REPO_DIR/deploy/lint-shell.sh" | tail -1
 fi
 
 echo "== $NAME 上牌 · mode=$([ "$APPLY" = 1 ] && echo apply || echo dry-run) · context=$CONTEXT =="
@@ -177,7 +177,13 @@ if step_wanted 4; then
 import json, sys, pathlib
 name, nodeport = sys.argv[1], int(sys.argv[2])
 surf = json.load(open(pathlib.Path("tool-surface.json")))
-tools = [t["name"] for g in surf.get("tool_groups", []) for t in g.get("tools", [])]
+# tool_groups[].tools 两种形态都见过：字符串数组（本仓）与 {name, level} 对象（fd-open-data-mcp）。
+# 只认一种就会在另一种上炸（dry-run 实测：string indices must be integers）。
+tools = []
+for g in surf.get("tool_groups", []):
+    for t in g.get("tools", []):
+        tools.append(t if isinstance(t, str) else t.get("name"))
+tools = [t for t in tools if t]
 print(json.dumps({
     "path": f"/{name}",
     "proxy_pass_url": f"http://cheap6.mesh.finddata.cn:{nodeport}/mcp",
@@ -191,7 +197,7 @@ print(json.dumps({
 PY
 )"
   echo "  payload:"
-  echo "$PAYLOAD" | python3 -m json.tool | sed 's/^/    /' | head -20
+  echo "$PAYLOAD" | python3 -c 'import json,sys;print(json.dumps(json.load(sys.stdin),ensure_ascii=False,indent=2))' | sed 's/^/    /' | head -20
   if [ -n "$REGISTRY_TOKEN" ]; then
     run "注册条目" curl -sS -X POST "$REGISTRY_BASE/api/servers" \
       -H "Authorization: Bearer $REGISTRY_TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD"

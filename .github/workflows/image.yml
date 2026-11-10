@@ -36,6 +36,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      # 放在装依赖之前：闸门是纯静态的，错了应该在 10 秒内红，别等 pip 装完。
+      # 拦的是「$VAR 后紧跟全角字符被 bash 吞进变量名」这类只会在上线时才炸的写法
+      # （实测两次：$NODEPORT（全集群）、$BUILD_HOST）），set -u 下直接 unbound variable。
+      - name: Shell lint（语法 + 花括号闸）
+        run: bash deploy/lint-shell.sh
+
       - name: Install
         run: |
           python -m pip install --upgrade pip
