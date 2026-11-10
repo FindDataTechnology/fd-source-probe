@@ -99,8 +99,116 @@ bash docs/artifacts/rollback-slot.sh                              # 真回滚：
 
 | # | 事项 | 选项 | 建议 |
 |---|---|---|---|
-| D1 | 覆盖 `testaction003/build-pool` 出片 | ① 授权覆盖（`--allow-snapshot-overwrite`）② 换 `testaction004/build-pool`（1609 min）③ 换公开线（免费无限，但 `platform-image-verify` 的 workflow 写死 law-bench/platform，需改他人工作流） | **①**：槽位已坏两天、无健康产线依赖；② 同样覆盖别人的快照且份额更少；③ 改他人工作流风险更高 |
+| D1 | 覆盖 `testaction003/build-pool` 出片 | ① 授权覆盖（`--allow-snapshot-overwrite`）② 换 `testaction004/build-pool`（1609 min）③ 换公开线（免费无限，但**两条都不通**：`image-publish.yml` 写死 `NAMESPACE=law-bench`/`IMAGE_NAME=platform`，且该仓最近一次 run 是 `failure`——`lint (Biome)` 挂的，不是我们的问题） | **①**：槽位已坏两天、无健康产线依赖；② 同样覆盖别人的快照且份额更少；③ 改他人工作流风险更高 |
 | D2 | 注册处条目写入 | 给 `REGISTRY_TOKEN` → 脚本自动 POST；不给 → 打印 curl 人工执行 | 给令牌，一次跑完 |
+
+## 五bis、覆盖前现算锚点：完整演练序列（逐条只读，可原样复制）
+
+池是共享槽位、**随时被别的会话推走**（本轮实测 1 小时内 `abea607` → `09bcdd4`），
+所以「锚点」不能用文档里写死的值，必须**覆盖前当场取**。
+
+```bash
+# ───────────────────────── 阶段 A：只读演练（不推送、不改仓变量）─────────────
+# A0 判路：现在该用哪条通道 + 各账号余额
+fd-build-channel
+
+# A1 现算锚点：池当前 HEAD（任何时刻都可能变，所以每次覆盖前都要重取）
+ANCHOR=$(git ls-remote git@github.com:testaction003/build-pool.git refs/heads/main | cut -c1-40)
+echo "ANCHOR=$ANCHOR"
+
+# A2 重算差分 + 核对锚点（占位变了，删除清单也会变）
+bash deploy/rehearse-slot.sh
+#   期望：[4] 里显示「✓ 锚点与池当前 HEAD 一致」；若报「≠」，说明池又被推过，
+#        以它打印的当前 HEAD 为准回到 A1 重取
+
+# A3 用当次锚点做「模拟覆盖 → 回滚 → 逐字节核对」，全程不推送
+ANCHOR="$ANCHOR" bash docs/artifacts/rollback-slot.sh --simulate-overwrite
+#   期望：覆盖后 N 个文件 → 回滚后 M 个文件 → "[核对] 与锚点逐字节一致 ✓"
+
+# A4 出片前再确认一次部署面（server dry-run，不改集群）
+bash deploy/onboard.sh --step 3
+
+# ───────────────────────── 阶段 B：真执行（需授权）───────────────────────────
+# B1 覆盖出片（--allow-snapshot-overwrite 是防误触闸，没有它脚本 fail-closed）
+bash deploy/onboard.sh --apply --allow-snapshot-overwrite --step 2
+
+# B2 等出片 run 绿后核 digest（relay 到 ccr 需 ≤5 分钟）
+skopeo inspect --no-tags docker://ccr.ccs.tencentyun.com/finddata-business/fd-source-probe:main \
+  | python3 -c "import json,sys;d=json.load(sys.stdin);print(d['Digest'])"
+
+# B3 集群落地 + 上线实证
+bash deploy/onboard.sh --apply --step 3
+bash deploy/ssrf-neg.sh
+
+# ───────────────────────── 阶段 C：出事了才用 ───────────────────────────────
+# C1 回滚池到覆盖前占位（--apply 才真推；默认只演练）
+ANCHOR="$ANCHOR" bash docs/artifacts/rollback-slot.sh --apply
+```
+
+**每步的判据**（红即停，不要往下走）：
+
+| 步 | 绿 | 红时的处置 |
+|---|---|---|
+| A1 | 取到 40 位 sha | 网络/权限问题，先 `git ls-remote` 裸跑一次 |
+| A2 | 「✓ 锚点与池当前 HEAD 一致」+ 打印删除/新增项数 | 「≠」→ 池被推走，用打印的当前 HEAD 重取锚点 |
+| A3 | 「[核对] 与锚点逐字节一致 ✓」 | 模拟覆盖/回滚有偏差 → **不要执行 B1**，先查回滚脚本 |
+| A4 | `server dry-run` 通过 | 清单/端口冲突，按提示改 |
+| B1 | 出片 run `success` + 铸出 `sha-<7>` | 看 run 日志；池可能又被别人占了（回到 A1） |
+| B2 | 打印 `sha256:…` | 镜像还没 relay 到 ccr → 等 5 分钟重试 |
+| B3 | `/healthz` 200 + `tools/list=['probe_endpoint']` + 8 条负例 PASS | 见 `deploy/VERIFY.md §5` |
+| C1 | 「✓ 已回滚 …」 | 锚点不可达 → 该占位已被 GC，只能找产出方重推 |
+
+## 五ter、`REGISTRY_TOKEN` 缺失时的降级注册路径
+
+脚本**不会假装注册成功**：无令牌时只把 payload 落盘并打印命令。降级路径按可行性排序：
+
+### 路径 1（推荐）：拿令牌一次性自动写
+
+```bash
+REGISTRY_TOKEN=<管理令牌> bash deploy/onboard.sh --apply --step 4
+```
+令牌只在本进程环境里，脚本不落盘、不回显。写后脚本内的核对命令可直接复查。
+
+### 路径 2：人工 POST（脚本已把 payload 落盘，无需手抄）
+
+```bash
+# payload 由 step 4 生成：docs/artifacts/registry-payload.json
+#   现内容：path=/fd-source-probe、auth_scheme=none、num_tools=1、
+#           tool_list=["probe_endpoint"]、commercial_tools=[]、internal_tools=["probe_endpoint"]
+export REGISTRY_TOKEN=<管理令牌>
+curl -sS -X POST https://mcp.finddatatech.cloud/api/servers \
+  -H "Authorization: Bearer $REGISTRY_TOKEN" -H 'Content-Type: application/json' \
+  --data-binary @docs/artifacts/registry-payload.json | python3 -m json.tool
+
+# 写后核对（三判据：在册 / 工具数=1 / 商业面为空）
+curl -sS -H "Authorization: Bearer $REGISTRY_TOKEN" https://mcp.finddatatech.cloud/api/servers \
+  | python3 -c "
+import json,sys
+row=[s for s in json.load(sys.stdin) if s.get('path')=='/fd-source-probe']
+assert row, '未在册'
+r=row[0]
+assert r.get('num_tools')==1, r.get('num_tools')
+assert (r.get('metadata') or {}).get('surface',{}).get('commercial_tools')==[], '商业面必须为空'
+print('✓ 在册 / num_tools=1 / commercial_tools=[]')"
+```
+
+### 路径 3：先落台账，注册延后（可接受，但要如实标注）
+
+1. `MCP-REGISTRY.md` 先加一行（台账先行是既有惯例），**可见性写 internal**；
+2. 注册条目延后补；
+3. 期间探针仍可直连 mesh NodePort（`http://cheap6.mesh.finddata.cn:31911/mcp`）使用——
+   它是 `auth_scheme=none` 的内部服务，不经网关也不经商业名单；
+4. **税要交清**：舰队 pack 里 `registryName: fd-source-probe` 在注册前会落
+   `awaiting-local-binding`（这是如实的"还没接通"，不是错误）。所以路径 3 期间
+   **不要铸造舰队 pack**，否则装出来少一个工具面。
+
+### 路径选择的判据
+
+| 情形 | 走哪条 |
+|---|---|
+| 手上有管理令牌 | 路径 1（一条命令，含核对） |
+| 只有网页控制台会话 | 路径 2（payload 已落盘，复制即可） |
+| 短期内拿不到令牌 | 路径 3，并**推迟舰队铸造**直到注册完成 |
 
 ## 六、授权后 10 分钟内可完成
 

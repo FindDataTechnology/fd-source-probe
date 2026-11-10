@@ -196,16 +196,24 @@ print(json.dumps({
 }, ensure_ascii=False))
 PY
 )"
-  echo "  payload:"
+  # payload 始终落盘：没有令牌时它就是交付物（人工 POST 用），有令牌时它是留档。
+  PAYLOAD_FILE="$REPO_DIR/docs/artifacts/registry-payload.json"
+  mkdir -p "$(dirname "$PAYLOAD_FILE")"
+  echo "$PAYLOAD" > "$PAYLOAD_FILE"
+  echo "  payload → $PAYLOAD_FILE"
   echo "$PAYLOAD" | python3 -c 'import json,sys;print(json.dumps(json.load(sys.stdin),ensure_ascii=False,indent=2))' | sed 's/^/    /' | head -20
   if [ -n "$REGISTRY_TOKEN" ]; then
     run "注册条目" curl -sS -X POST "$REGISTRY_BASE/api/servers" \
       -H "Authorization: Bearer $REGISTRY_TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD"
   else
-    echo "  ! 未给 REGISTRY_TOKEN —— 不假装注册成功。人工执行："
-    echo "    curl -X POST $REGISTRY_BASE/api/servers \\"
-    echo "      -H 'Authorization: Bearer <管理令牌>' -H 'Content-Type: application/json' \\"
-    echo "      -d '<上面的 payload>'"
+    echo "  ! 未给 REGISTRY_TOKEN —— 不假装注册成功（降级路径见 docs/build-slot-decision.md §五）"
+    echo "    人工执行（payload 已落盘，直接引用文件）："
+    echo "      curl -sS -X POST $REGISTRY_BASE/api/servers \\"
+    echo "        -H \"Authorization: Bearer \$REGISTRY_TOKEN\" -H 'Content-Type: application/json' \\"
+    echo "        --data-binary @$PAYLOAD_FILE | python3 -m json.tool"
+    echo "    写后核对："
+    echo "      curl -sS -H \"Authorization: Bearer \$REGISTRY_TOKEN\" \\"
+    echo "        '$REGISTRY_BASE/api/servers' | python3 -c \"import json,sys;print([s for s in json.load(sys.stdin) if s.get('path')=='/fd-source-probe'])\""
   fi
 fi
 
