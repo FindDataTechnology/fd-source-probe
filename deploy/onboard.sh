@@ -131,6 +131,17 @@ fi
 # ── 2. 出片 / 校验镜像 ────────────────────────────────────────────────────
 if step_wanted 2; then
   echo "[2] 镜像（构建统一走 GitHub Actions · 出片仓 ${BUILD_HOST}）"
+  # 三方对账：快照 --namespace/--image 决定 relay 登记名；workflow 决定实际推到哪；清单决定拉哪。
+  # 三者不一致 = 镜像推上去了但永远 relay 不到 ccr = ImagePullBackOff（2026-11-10 抓出：
+  # onboard 传 finddata、workflow 写 finddata-business、清单拉 finddata-business）。
+  WF_NS=$(grep -oE '^  NAMESPACE: *[a-z0-9-]+' .github/workflows/image.yml | awk '{print $2}')
+  WF_IMG=$(grep -oE '^  IMAGE_NAME: *[a-z0-9-]+' .github/workflows/image.yml | awk '{print $2}')
+  MF_IMG=$(grep -oE 'image: *[a-z0-9./_-]+' deploy/k8s/fd-source-probe.yaml | head -1 | awk '{print $2}')
+  echo "    对账：workflow=${WF_NS}/${WF_IMG} · 清单=${MF_IMG}"
+  case "$MF_IMG" in
+    *"/${WF_NS}/${WF_IMG}"*) echo "    ✓ workflow 目标与清单拉取一致（${WF_NS}/${WF_IMG}）" ;;
+    *) fail "workflow（${WF_NS}/${WF_IMG}）与清单（${MF_IMG}）不一致——镜像会推错仓/拉不到" ;;
+  esac
   echo "  裁决依据：不依赖 gitee 仓与 TCR secret；出片仓自带 TCR 凭据。"
   command -v fd-build-snapshot >/dev/null || fail "缺 fd-build-snapshot"
   echo "  \$ 先干跑看覆盖面（快照会覆盖出片仓当前内容）"
@@ -139,7 +150,7 @@ if step_wanted 2; then
   # fd-zhengxin-web/api 且要 server//web/ 目录，根本不读 BUILD_* 变量）→ 谁推都 9–14 秒挂，
   # 已连续 11 次失败、跨 6 个项目。带上本仓的 image.yml 才能让构建跑我们自己的 workflow。
   SNAP_OUT=$(fd-build-snapshot "$REPO_DIR" -R "$BUILD_HOST" \
-      --namespace finddata --image "${NAME}" \
+      --namespace finddata-business --image "${NAME}" \
       --dockerfile Dockerfile --context . --ref main --branch main \
       --keep-workflows --dry-run 2>&1)
   echo "$SNAP_OUT" | grep -E "变更|将提交|将推送|⚠️" | sed 's/^/    /'
@@ -155,7 +166,7 @@ if step_wanted 2; then
     echo "  （dry-run：不推快照。真跑：bash deploy/onboard.sh --apply --allow-snapshot-overwrite）"
   elif [ "$ALLOW_OVERWRITE" = "1" ]; then
     run "推快照出片" fd-build-snapshot "$REPO_DIR" -R "$BUILD_HOST" \
-        --namespace finddata --image "${NAME}" \
+        --namespace finddata-business --image "${NAME}" \
         --dockerfile Dockerfile --context . --ref main --branch main \
         --keep-workflows
     echo "  \$ 等出片仓的 image run 绿（出片 tag = 快照仓 commit 短 sha）"
