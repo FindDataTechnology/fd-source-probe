@@ -3,6 +3,33 @@
 > 2026-11-10 · 配套 `deploy/onboard.sh --step 2`、`deploy/rehearse-slot.sh`、`docs/artifacts/rollback-slot.sh`
 > **只等你一句授权 + 一枚注册令牌**，其余全部就绪。
 
+
+## 零、**已诊断并修掉的第一条失败**：池 11 连败的真根因（2026-11-10）
+
+不是「别人的占位坏了」，是**出片管线的结构性缺陷**：
+
+| 环节 | 事实 |
+|---|---|
+| 工具做什么 | `fd-build-snapshot` 给出片仓设 4 个变量 `BUILD_NAMESPACE/BUILD_IMAGE/BUILD_DOCKERFILE/BUILD_CONTEXT` |
+| 池里 workflow 读吗 | **读 0 个**（`grep -c BUILD_` = 0）；它写死 `fd-zhengxin-web` / `fd-zhengxin-api`，且要 `server/`、`web/` 两个目录 |
+| 为什么一直不更新 | 工具**默认排除 `/.github`**（防非 Linux runner 烧额度）→ 池里的 workflow 永远停在上一版 |
+| 后果 | 谁推都跑那份陈旧 workflow → 缺 `server/` → `bash: … No such file or directory` → 9–14 秒挂。**11 次连续失败，跨 6 个项目**（fd-wanxing / law-bench / lex-ops-mcp / paas-ship / fd-memory / fd-proxy-service） |
+
+**修法**：快照必须带自己的 workflow → `--keep-workflows`。
+已落进 `deploy/onboard.sh` step 2（干跑与真推两处都带），并在输出里断言这一项进入快照。
+
+**验证（实测差值为 1，可复核）**：
+
+```
+不 keep: 1802 项；keep: 1803 项；差 = 1
+✓ 差值恰为 1：该 1 项就是 .github/workflows/image.yml
+```
+
+> 附带结论（给后来人）：这个池对**所有人**都缺这一步。之后谁用 `testaction00x/build-pool`
+> 出片，不传 `--keep-workflows` 就会继续 10 秒挂，且会看到「上次 run failure」而不自知。
+> 根治要么人人带 `--keep-workflows`，要么把池里那份 workflow 换成读 `BUILD_*` 的通用版
+> （后者是改共享仓、影响所有使用者，需另行授权，不在本单范围）。
+
 ## 一、风险面（全部实测，无估计）
 
 | 问题 | 答案 | 依据 |
@@ -130,6 +157,7 @@ bash deploy/onboard.sh --step 3
 
 # ───────────────────────── 阶段 B：真执行（需授权）───────────────────────────
 # B1 覆盖出片（--allow-snapshot-overwrite 是防误触闸，没有它脚本 fail-closed）
+#    脚本内部已带 --keep-workflows：不带的话池会继续跑那份陈旧 workflow（见 §零）
 bash deploy/onboard.sh --apply --allow-snapshot-overwrite --step 2
 
 # B2 等出片 run 绿后核 digest（relay 到 ccr 需 ≤5 分钟）

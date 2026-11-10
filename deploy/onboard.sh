@@ -132,12 +132,20 @@ if step_wanted 2; then
   echo "  裁决依据：不依赖 gitee 仓与 TCR secret；出片仓自带 TCR 凭据。"
   command -v fd-build-snapshot >/dev/null || fail "缺 fd-build-snapshot"
   echo "  \$ 先干跑看覆盖面（快照会覆盖出片仓当前内容）"
+  # --keep-workflows 是**必需**的（2026-11-10 诊断）：fd-build-snapshot 默认排除 /.github，
+  # 于是出片仓里的 image.yml 永远停在上一版（实测池里那份是 fd-zhengxin 的，写死
+  # fd-zhengxin-web/api 且要 server//web/ 目录，根本不读 BUILD_* 变量）→ 谁推都 9–14 秒挂，
+  # 已连续 11 次失败、跨 6 个项目。带上本仓的 image.yml 才能让构建跑我们自己的 workflow。
   SNAP_OUT=$(fd-build-snapshot "$REPO_DIR" -R "$BUILD_HOST" \
       --namespace finddata --image "${NAME}" \
-      --dockerfile Dockerfile --context . --ref main --branch main --dry-run 2>&1)
+      --dockerfile Dockerfile --context . --ref main --branch main \
+      --keep-workflows --dry-run 2>&1)
   echo "$SNAP_OUT" | grep -E "变更|将提交|将推送|⚠️" | sed 's/^/    /'
   DEL=$(echo "$SNAP_OUT" | grep -oE '变更 [0-9]+ 项' | grep -oE '[0-9]+' || echo 0)
   echo "    将影响 $DEL 项（其中删除项=出片仓现占位内容）"
+  if ! echo "$SNAP_OUT" | grep -q "排除 /.github"; then
+    echo "    ✓ 含本仓 .github/workflows/image.yml（覆盖池里那份陈旧 workflow，构建才会跑我们的）"
+  fi
   if [ "$APPLY" = "1" ] && [ "$ALLOW_OVERWRITE" != "1" ]; then
     fail "真推快照会覆盖 $BUILD_HOST 当前内容——确认请加 --allow-snapshot-overwrite"
   fi
@@ -146,7 +154,8 @@ if step_wanted 2; then
   elif [ "$ALLOW_OVERWRITE" = "1" ]; then
     run "推快照出片" fd-build-snapshot "$REPO_DIR" -R "$BUILD_HOST" \
         --namespace finddata --image "${NAME}" \
-        --dockerfile Dockerfile --context . --ref main --branch main
+        --dockerfile Dockerfile --context . --ref main --branch main \
+        --keep-workflows
     echo "  \$ 等出片仓的 image run 绿（出片 tag = 快照仓 commit 短 sha）"
     gh run list -R "$BUILD_HOST" --limit 3 || true
   fi
