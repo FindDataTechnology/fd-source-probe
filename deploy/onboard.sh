@@ -81,7 +81,9 @@ if git ls-remote --exit-code "$GITEE_REMOTE" HEAD >/dev/null 2>&1; then
   echo "  ✓ gitee 仓已存在"
   GITEE_OK=1
 else
-  echo "  ✗ gitee 仓不存在（或无权访问）→ 人工建空仓后重跑"
+  # 按 2026-11-10 裁决：不建、不配 secret —— 仓不存在是**预期状态**，不是错误。
+  # 这里曾打 ✗「人工建空仓后重跑」，与裁决自相矛盾（脚本自己指了个不该做的动作）。
+  echo "  ⤳ gitee 仓不存在（2026-11-10 裁决：不建此仓；step 1 将跳过，不阻塞）"
   GITEE_OK=0
 fi
 
