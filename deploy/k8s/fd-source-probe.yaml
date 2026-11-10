@@ -5,7 +5,7 @@
 #   * 审计落 emptyDir（/var/log/fd-source-probe/audit.jsonl），证据可随取证流程拷出
 #   * FD_PROBE_PROXY_FORWARDER 指向既有 proxy-service forwarder（proxy-ignorant 纪律：
 #     探针不实现选择/熔断，出口策略全在 proxy-service）
-#   * internal-only：不建 Ingress；仅 mesh NodePort 可达（cheap6.mesh.finddata.cn:31904）
+#   * internal-only：不建 Ingress；仅 mesh NodePort 可达（cheap6.mesh.finddata.cn:31911）
 # 资源档：纯转发型轻负载，requests 20m/64Mi；limits 给足余量防探针并发峰值。
 apiVersion: apps/v1
 kind: Deployment
@@ -73,4 +73,4 @@ spec:
     - name: http
       port: 80
       targetPort: http
-      nodePort: 31904
+      nodePort: 31911

@@ -9,16 +9,33 @@
 - **审计落 emptyDir**：pod 重建即清空；取证时先拷（`kubectl cp`，勿用 `exec -i cat`）。
   若要持久，后续波次换 PVC，不在首铸范围。
 
+## 出片前置（2026-11-10 勘验）
+
+- **不要用共享构建池出这片**：`fd-build-snapshot fd-source-probe -R testaction003/build-pool` 的 dry-run 显示它会**删掉当前占位项目的 1742 个文件**（池是共享槽位，一项目一占位），且此刻镜像无人可部署（仓与 Argo 都还没有）——白占槽位还挤掉并发会话。
+- 正解：仓内 `image.yml` 走 GitHub → hkccr。仓建好后 push 即出片，不占共享池。
+
 ## NodePort
 
-`31904`（2026-11-10 实查 fd-prod 在用表：31891 与 31904 为仅有的两个空洞，取 31904）。
+`31911`（2026-11-10 实查**全集群**空闲）。
+
+> ⚠️ 首版写的 31904 是错的：当时只查了 `-n fd-prod`，而 **NodePort 是集群级资源**——
+> 31904 其实被 `chatwoot/chatwoot-web` 占着（fd-prod 里看不见）。server dry-run 当场报
+> `provided port is already allocated`。查法必须是 `kubectl get svc -A`。
+
+## 一键脚本与校验清单
+
+- `deploy/onboard.sh` — 上牌四步一键执行（`--dry-run` 默认只预检；`--apply` 真跑；`--step N` 单步）
+- `deploy/VERIFY.md` — 逐条可判绿判红的校验清单（0 前置 / 1 首推 / 2 镜像 / 3 ArgoCD / 4 注册 / 5 实证 / 6 舰队接线）
+- `deploy/ssrf-neg.sh` — §5.3/§5.4 的集群内 SSRF 负例（`--dry-run` 占用+报错路径自检 / `--local` 本机预演 / 无参集群真跑）
+
+脚本纪律：fail-closed（预检不满足就停）、幂等（重复跑不产生第二份资源）、不猜（注册条目无令牌只打印 curl）。
 
 ## 上牌五步（一次性；3-5 为对外动作，需主人一句授权）
 
 | # | 动作 | 性质 |
 |---|---|---|
-| 1 | gitee 建仓 `FindDataTechnology/fd-source-probe` + 首推（本目录尚无 .git） | 对外（建公开仓） |
-| 2 | `docker build` + 推 `ccr.ccs.tencentyun.com/finddata-business/fd-source-probe:main` | 对外（出片） |
+| 1 | gitee 建仓 `FindDataTechnology/fd-source-probe`（私有即可）→ 本地仓已就绪（commit `0029cb3`，remote `gitee` 已配）：建仓后一条命令 `git -C fd-source-probe push -u gitee main`。**2026-11-10 勘验**：本机无 GITEE_TOKEN；Argo 的 5 个 repo secret 全是 SSH deploy key（org 级只读拉取，实测 ssh -T 认证为寻数科技），建仓用不上——必须主人网页建仓或给 API 令牌 | 对外（建私有仓） |
+| 2 | 出片：**仓内已有 `.github/workflows/image.yml`**（照 zhengxin 配方：测试门 → hkccr → 内容闸门铸 `sha-<7>`），仓建好首次 push 即自动出片；前置=仓上配 `TCR_USERNAME`/`TCR_PASSWORD` | 对外（出片） |
 | 3 | argocd ns 建 repo 凭据 secret `repo-fd-source-probe` | 集群内 |
 | 4 | `kubectl apply -f deploy/argocd/application.yaml`（automated+selfHeal） | 集群内 |
 | 5 | 注册处条目 `POST /api/servers`：path=/fd-source-probe、auth_scheme=none、endpoint=mesh:31904/mcp、tool-surface 随仓；surface 名单表 commercial=0/internal=1 | 对外（供给面） |
