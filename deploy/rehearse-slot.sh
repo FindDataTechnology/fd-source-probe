@@ -80,22 +80,29 @@ echo "    删除项按顶层目录聚合："
 /usr/bin/awk -F/ '{print ($2==""?"<root>":$1"/"$2)}' "$OUT/slot-would-delete.txt" \
   | sort | uniq -c | sort -rn | head -8 | sed 's/^/      /'
 
-# ── 4. 生成可执行回滚脚本 ─────────────────────────────────────────────
-cat > "$OUT/rollback-slot.sh" <<ROLLBACK
-#!/usr/bin/env bash
-# 回滚 ${POOL} 到覆盖前的占位（由 rehearse-slot.sh 于 $(date -u +%FT%TZ) 生成）
-# 锚点：${HEAD_SHA:0:7} = ${HEAD_MSG}
-set -euo pipefail
-cd /tmp && rm -rf slot-restore
-git clone git@github.com:${POOL}.git slot-restore
-cd slot-restore
-git reset --hard ${HEAD_SHA}
-git push --force origin main
-echo "已回滚 ${POOL} → ${HEAD_SHA:0:7}"
-echo "注意：该占位本身处于失败态（见出片池演练报告），回滚等于回到同样的状态。"
-ROLLBACK
-chmod +x "$OUT/rollback-slot.sh"
-echo "[4] 回滚脚本 → ${OUT}/rollback-slot.sh（锚点 ${HEAD_SHA:0:7}）"
+# ── 4. 回滚脚本：**不生成**，只校验既有那份的锚点是否与当前 HEAD 一致 ──
+# 教训（2026-11-10）：本脚本早先用模板**生成** rollback-slot.sh，模板版忽略参数、
+# 无参即 push——一次 --dry-run 调用实际执行了 force push（所幸是 no-op）。
+# 现在回滚脚本是手写单源 `docs/artifacts/rollback-slot.sh`（默认演练、--apply 才推），
+# 这里只做锚点核对，绝不覆盖它。
+RB="$REPO_DIR/docs/artifacts/rollback-slot.sh"
+echo "[4] 回滚脚本（单源，不由本脚本生成）"
+if [ ! -x "$RB" ]; then
+  echo "    ! 缺 $RB —— 回滚手段不可用，覆盖前必须先补"
+else
+  # 从 `ANCHOR="${ANCHOR:-<40位 sha>}"` 里取默认锚点；取不到就单独报"读不出"
+  RB_ANCHOR=$(awk -F'[0-9a-f]' 'BEGIN{IGNORECASE=0} /^ANCHOR=/ { if (match($0, /[0-9a-f]{40}/)) print substr($0, RSTART, RLENGTH) }' "$RB" | head -1)
+  echo "    脚本锚点 : ${RB_ANCHOR:0:7}"
+  echo "    池当前   : ${HEAD_SHA:0:7}"
+  if [ -z "$RB_ANCHOR" ]; then
+    echo "    ! 读不出脚本里的 ANCHOR 默认值——脚本被改坏？检查 $RB 第 16 行"
+  elif [ "$RB_ANCHOR" = "$HEAD_SHA" ]; then
+    echo "    ✓ 锚点与池当前 HEAD 一致——覆盖后可直接回滚"
+  else
+    echo "    ! 锚点（${RB_ANCHOR:0:7}）≠ 池当前（${HEAD_SHA:0:7}）——池被别人推过，覆盖前先更新锚点"
+  fi
+  echo "    演练命令 : bash docs/artifacts/rollback-slot.sh --simulate-overwrite"
+fi
 
 # ── 5. 判定 ─────────────────────────────────────────────────────────────
 echo "[5] 判定"

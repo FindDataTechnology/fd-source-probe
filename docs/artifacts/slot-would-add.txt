@@ -1,10 +1,16 @@
+deploy/README.md
 deploy/VERIFY.md
 deploy/_lint_brace.py
 deploy/argocd/application.yaml
 deploy/k8s/fd-source-probe.yaml
 deploy/lint-shell.sh
 deploy/onboard.sh
+deploy/rehearse-slot.sh
 deploy/ssrf-neg.sh
+docs/artifacts/rollback-slot.sh
+docs/artifacts/slot-would-add.txt
+docs/artifacts/slot-would-delete.txt
+docs/build-slot-decision.md
 fd_source_probe/__init__.py
 fd_source_probe/audit.py
 fd_source_probe/classify.py
@@ -13,9 +19,7 @@ fd_source_probe/config.py
 fd_source_probe/guard.py
 fd_source_probe/probe.py
 fd_source_probe/server.py
-pyproject.toml
 scripts/probe_evidence.py
 tests/test_guard_and_classify.py
 tests/test_probe.py
 tests/test_server_surface.py
-tool-surface.json

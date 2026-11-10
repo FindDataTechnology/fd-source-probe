@@ -7,10 +7,10 @@
 
 | 问题 | 答案 | 依据 |
 |---|---|---|
-| 槽位现在是谁 | `fd-wanxing.git @ 53eeb8957` 的快照，**413** 个文件 | 池仓 HEAD `abea607`、`BUILD-INFO.json` |
-| 它现在健康吗 | **不健康**：最近 10 次 run **全 failure**，每次 **9–14 秒**即挂 | 下表 |
+| 槽位现在是谁 | **`law-bench-internal @ 3d0b6ee71`** 的快照，**1787** 个文件（1 小时前还是 fd-wanxing 的 413 个——**池在漂**） | 池仓 HEAD `09bcdd4`、`BUILD-INFO.json` |
+| 它现在健康吗 | **不健康**：最近 **11 次** run **全 failure**，每次 **9–14 秒**即挂（含 12:32 刚落的新占位） | 下表 |
 | 挂的根因 | 池里的 `image.yml` 是 **fd-zhengxin 的**（`working-directory: server` / `context: web`），快照树里没有 `server/`、`web/` → bash 起不来 | 日志原文见下 |
-| 覆盖会删什么 | **408 项** | `docs/artifacts/slot-would-delete.txt` |
+| 覆盖会删什么 | **1812 项**（随占位变化；跑 `deploy/rehearse-slot.sh` 重算） | `docs/artifacts/slot-would-delete.txt` |
 | 删除构成 | `openspec/changes` 239 · `wanxing-web/src` 33 · `services/wanxing-facade` 20 · `openspec/specs` 13 · 其余 103 | 同上 |
 | 会不会害到在产线 | **不会**：池已连续失败两天，无健康构建依赖它 | 下表 |
 | 真风险是什么 | **同一时刻别的会话也在推这个池** → 互相覆盖（历史事故：`yizuo/fleet-observer` 曾被推成 `fd-legal-search-mcp`） | 池仓 62 提交，最近 5 个占位分属 fd-wanxing / law-bench / lex-ops-mcp / paas-ship / fd-memory |
@@ -19,6 +19,7 @@
 
 | run id | 耗时 | 占位 sha | 内容 |
 |---|---|---|---|
+| 42816676884 | **11s** | 09bcdd4 | law-bench-internal @ 3d0b6ee71 — snapshot（**最新的，也挂**） |
 | 42808513391 | **11s** | abea607 | fd-wanxing.git @ 53eeb8957 — snapshot |
 | 42686263646 | **12s** | acaaa57 | law-bench @ 807ae5b05 — snapshot |
 | 42648317902 | **10s** | a64b029 | lex-ops-mcp @ bae84c91c — snapshot |
@@ -51,6 +52,15 @@ run 42459488227  ##[error]An error occurred trying to start process '/usr/bin/ba
 3. `git push --force` 快照 → **408 删、5 改、21 增**
 4. push 触发 `image.yml`：Shell lint + 测试门（52 条）→ 构建 → 推 `hkccr…/finddata-business/fd-source-probe:main` + 铸 `sha-<7>`
 5. relay 把 hkccr 同步到 ccr（≤5 分钟）；k8s 清单 pin 的是 **ccr**
+
+## 二bis、池会漂（本轮实测，改变了裁决口径）
+
+本裁决单第一版写完 1 小时内，池就被另一个会话推成了 `law-bench-internal`（`abea607` → `09bcdd4`），
+删除项从 408 变成 1812。含义：
+
+- **锚点必须现算**：`deploy/rehearse-slot.sh` 会核对「脚本锚点 vs 池当前 HEAD」，不一致会明确报红
+- **覆盖前先跑一次演练**，用当次 HEAD 作锚点：`ANCHOR=<当前 HEAD> bash docs/artifacts/rollback-slot.sh --apply`
+- **这恰好证明池是共享无主槽位**：谁都能推、推了都挂、没人维护 → 覆盖它不构成对他人在产线的破坏
 
 ## 三、回滚（已演练）
 
