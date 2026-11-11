@@ -65,10 +65,40 @@
 - `auth`: 无（`auth_scheme=none`），不需要任何凭据引用
 - 该 cell 内的 agent 才能拿到 `probe_endpoint` 这一个工具
 
+### 可直接执行的配方（2026-11-11 从代码核过字段名）
+
+平台侧新增本地 MCP server 的接口是 `POST /api/extensions/mcp`（`paas/server/routes/extensions.js:96`），
+body = `{name, config, enabled}`。运行时按 `config.url` 判 `transport: "streamable-http"`
+（`paas/dsh-profile.js:850-852`）；`config.credentialRef` 是**系统托管字段，客户端提交会被 400 拒**
+（"credentialRef is system-managed"）——正好，探针零凭据，本来也不需要。
+
+```json
+{
+  "name": "fd-source-probe",
+  "enabled": true,
+  "config": {
+    "transport": "streamable-http",
+    "url": "http://cheap6.mesh.finddata.cn:31911/mcp"
+  }
+}
+```
+
+```bash
+# 在目标 cell 内（或对 platform 的 /api/extensions/mcp，需 mcp 管理权限）：
+curl -sS -X POST http://127.0.0.1:3100/api/extensions/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"fd-source-probe","enabled":true,
+       "config":{"transport":"streamable-http","url":"http://cheap6.mesh.finddata.cn:31911/mcp"}}'
+```
+
 **判据（装完当场可验，不要靠"应该能行"）**：
 1. cell 内 `tools/list` 出现且仅出现 `probe_endpoint`；
 2. 包安装报告里该引用 `status` 为 **`bound`**（不是 `awaiting-local-binding`，也不是 `reused`）；
 3. 真调一次 `probe_endpoint` 拿到 200 与固定形状出参（而不是只看 tools 列表）。
+
+> **为什么还没建这一行**：目前没有任何 cell/包在用它（舰队 pack 尚未铸造）。
+> 先建行等于给一个没有消费者的 cell 加配置 —— 那是"挂载了但没人用"，与本文件批的
+> "声明了但没挂载"是同一枚硬币的两面。所以这里只备配方，等真有消费者再落。
 
 ## 五、教训（写给后来人）
 
