@@ -1,0 +1,34 @@
+{
+  "schema": "line-manifest/v1",
+  "line": "source-probe",
+  "public_base_url": "https://mcp.finddatatech.cloud/fd-source-probe",
+  "identity": {
+    "issuer": "https://auth.finddatatech.cloud/oidc",
+    "jwks_uri": "https://auth.finddatatech.cloud/oidc/jwks",
+    "jit_policy": "off",
+    "note": "本仓零入站凭据校验：`FastMCP(SERVER_NAME, ...)` 未传 auth、未挂中间件（server.py:76-78），HTTP 面只有 `/mcp` + 无门 `/healthz`（server.py:81-88）。无断言兑换端点，jit_policy=off。"
+  },
+  "auth_tracks": [
+    {
+      "kind": "customer-key",
+      "accepts": "ciyuan-sk",
+      "fallback": false,
+      "enforced": false,
+      "migration_task": "converge-line-identity-and-keys#8.3",
+      "note": "未接：本仓不解析任何入站凭据，词元钥匙打进来只被当作不存在。"
+    }
+  ],
+  "scopes": [
+    "line:read"
+  ],
+  "billing": {
+    "plane": "ciyuan",
+    "note": "本仓无计费代码；且 hosting=internal-only，本线不在对外商业供给面，计量不适用。记 ciyuan 只为与其它线同口径（真扣费只发生在 registry/网关）。"
+  },
+  "surfaces": {
+    "mcp": true,
+    "account": false,
+    "admin": false
+  },
+  "note": "**内部专用线**：tool-surface.json 的 `hosting=internal-only`、描述明写「不进对外商业工具名单」；1 个只读工具，给源解决方案舰队产带证据的生成单（SSRF 防线在工具内）。因此「无回退轨」是设计选择而非缺陷：它本就不该被外部客户直接消费。若将来转对外，必须先加线自有钥匙再谈商业供给。"
+}
