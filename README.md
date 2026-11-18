@@ -1,5 +1,7 @@
 # fd-source-probe — 源侦察探针（internal-only）
 
+> **Part of the [Wire line (寻数·柏讯)](https://www.finddatatech.cloud/products/wire) of [FindData](https://www.finddatatech.cloud)** — Source probe — checks whether an upstream source is reachable and what it returns.
+
 一个只读探针 MCP：对候选数据源做**一次可复现的实测**，返回状态码、耗时、响应头、
 出口身份与响应体前缀，供源解决方案舰队产出带证据的生成单。
 
