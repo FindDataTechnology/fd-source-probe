@@ -72,7 +72,7 @@ from fd_source_probe.probe import probe
 CASES = [
     ("loopback-ipv4",     dict(url="http://127.0.0.1:8000/x"),                       "guard_rejected", "回环"),
     ("metadata-linklocal", dict(url="http://169.254.169.254/latest/meta-data/"),     "guard_rejected", "链路本地"),
-    ("tailnet-cgnat",     dict(url="http://100.64.0.11:18004/mcp"),                  "guard_rejected", "保留"),
+    ("tailnet-cgnat",     dict(url="http://100.64.0.1:18004/mcp"),                  "guard_rejected", "保留"),
     ("cluster-dns-name",  dict(url="http://fd-source-probe.fd-prod.svc.cluster.local/mcp"),
                                                                                      "guard_rejected", "内网后缀"),
     ("single-label-host", dict(url="http://probe-internal/x"),                       "guard_rejected", "单标签"),

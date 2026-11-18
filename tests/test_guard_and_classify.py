@@ -33,7 +33,7 @@ def _settings(**kw) -> Settings:
         ("http://192.168.1.1/x", "私网"),
         ("http://172.16.9.9/x", "私网"),
         ("http://169.254.169.254/latest/meta-data/", "链路本地"),
-        ("http://100.64.0.11:18004/mcp", "保留/共享"),
+        ("http://100.64.0.1:18004/mcp", "保留/共享"),
         ("http://0.0.0.0/x", "未指定"),
         ("http://[::1]/x", "回环"),
         ("http://[fd00::1]/x", "私网"),
@@ -71,7 +71,7 @@ def test_allowlist_narrows_but_keeps_denylist():
 
 def test_ip_denied_uses_is_global_not_blacklist():
     # 100.64/10 既不是 is_private 也不是 is_global —— 用 is_global 才拦得住
-    assert guard._ip_denied("100.64.0.11") is not None
+    assert guard._ip_denied("100.64.0.1") is not None
     assert guard._ip_denied("8.8.8.8") is None
     assert guard._ip_denied("::ffff:10.0.0.1") is not None
 
