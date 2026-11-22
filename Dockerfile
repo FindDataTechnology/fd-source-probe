@@ -7,9 +7,27 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# 依赖由 uv.lock 钉死（openspec: unify-fastmcp-and-board-five）。
+# 构建读锁而不是裸 `pip install .`——后者每次解析到当时最新版，声明与实装会静默漂移。
+# 用 uv 镜像导出 requirements 再交给 pip，保持本仓原有 pip 安装形状不变。
+FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS deps
+WORKDIR /src
+COPY pyproject.toml uv.lock README.md ./
+COPY fd_source_probe ./fd_source_probe
+RUN uv export --frozen --no-dev --no-emit-project --format requirements-txt -o /tmp/req.txt
+
+FROM python:3.12-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+COPY --from=deps /tmp/req.txt /tmp/req.txt
 COPY pyproject.toml README.md ./
 COPY fd_source_probe ./fd_source_probe
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir -r /tmp/req.txt && pip install --no-cache-dir --no-deps .
 
 # 审计落盘目录（compose/k8s 挂卷覆盖）
 RUN mkdir -p /var/log/fd-source-probe
