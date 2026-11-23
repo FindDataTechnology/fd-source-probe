@@ -55,7 +55,7 @@
 
 ## 上牌后收尾
 
-1. 真 e2e：直连 `initialize→tools/list` 枚举恰好 `probe_endpoint`（从 cheap-6 节点测，
+1. 真 e2e：直连 `initialize→tools/list` 枚举恰好 `probe_endpoint`（从一个工作节点测，
    不经 mcp 网关——网关剥 auth 的旧结论与本服务无关，auth_scheme=none）。
 2. SSRF 负例复测跑在**集群内**（`kubectl exec` 进 pod 打两条负例），本机绿的防线
    要在真实出网环境再绿一次。

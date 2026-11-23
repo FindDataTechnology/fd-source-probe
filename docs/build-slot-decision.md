@@ -75,7 +75,7 @@ run 42459488227  ##[error]An error occurred trying to start process '/usr/bin/ba
 
 1. 设 4 个仓变量：`BUILD_NAMESPACE=finddata`、`BUILD_IMAGE=fd-source-probe`、`BUILD_DOCKERFILE=Dockerfile`、`BUILD_CONTEXT=.`
    —— **四个必须给齐**：池变量是全局的，只给两个会拿别人的 DF/CONTEXT 起构建
-2. 登记 relay：`finddata/fd-source-probe` → cheap-3 `/etc/tcr-relay/repos.conf`（cron 下轮生效，hkccr→ccr 回灌）
+2. 登记 relay：`finddata/fd-source-probe` → relay 节点 `/etc/tcr-relay/repos.conf`（cron 下轮生效，hkccr→ccr 回灌）
 3. `git push --force` 快照 → **408 删、5 改、21 增**
 4. push 触发 `image.yml`：Shell lint + 测试门（52 条）→ 构建 → 推 `hkccr…/finddata-business/fd-source-probe:main` + 铸 `sha-<7>`
 5. relay 把 hkccr 同步到 ccr（≤5 分钟）；k8s 清单 pin 的是 **ccr**
