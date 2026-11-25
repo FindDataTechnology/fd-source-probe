@@ -3,7 +3,9 @@
   "server": "fd-source-probe",
   "entry_path": "/fd-source-probe",
   "product_line": "wire",
-  "hosting": ["internal-only"],
+  "hosting": [
+    "internal-only"
+  ],
   "visibility": "internal",
   "description": "源侦察探针（内部专用，只读）：对候选数据源做一次可复现的实测，返回状态码/耗时/响应头/出口身份/响应体前缀与四分类判定。供源解决方案舰队产出带证据的生成单；不进对外商业工具名单。SSRF 防线=私网与保留地址、集群内服务名一律拒，重定向逐跳复判；出口经既有 proxy-service 通路，代理不可用如实报错、不降级直连。",
   "naming_convention": {
@@ -15,7 +17,9 @@
     {
       "group": "probe",
       "level": "internal",
-      "tools": ["probe_endpoint"],
+      "tools": [
+        "probe_endpoint"
+      ],
       "data_sources": [
         "任意经校验的公网 http/https 端点（探测对象，不落库）"
       ],
@@ -24,7 +28,17 @@
   ],
   "rules": {
     "commercial_tools": [],
-    "internal_tools": ["probe_endpoint"],
+    "internal_tools": [
+      "probe_endpoint"
+    ],
     "note": "commercial_tools 为空是设计要求，不是遗漏：探针能产生任意出网流量，不得面向客户凭据开放。若未来出现商业需要，须先过安全评审并另立 change。"
+  },
+  "tool_annotations": {
+    "probe_endpoint": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
   }
 }
